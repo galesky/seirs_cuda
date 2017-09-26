@@ -1,0 +1,8 @@
+1. SETAR O AMBIENTE #cpu
+2. INICIALIZAR OS AGENTES #cpu
+3. SORTEAR ALEATORIOS
+4.1. MOVIMENTO #cuda
+4.2. UPDATE DE STATUS e CONTADOR #cuda
+(retornar apenas 4 inteiros com SEIRS)
+5. GRAVAR NO LOG e 3(). #cpu
+
