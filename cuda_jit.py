@@ -85,35 +85,38 @@ def periodoInf(stat):
              
 # Função de movimentação
 
-@cuda.jit('void(uint32[:])')
-def move(ag_arr):
-    i = cuda.grid(1)
-    posx = getPosX(ag_arr[i])
-    posy = getPosY(ag_arr[i])
-    n = 4 # random 0-8
+@cuda.jit('uint32(uint32, uint16)', device = True)
+def move(ag, direction):
+    posx = getPosX(ag)
+    posy = getPosY(ag)
+    n = direction # random 0-8
     if (n == 0):
         posx -= 1
+        posy += 1
     if (n == 1):
-        posx += 1
+        posy += 1
     if (n == 2):
-        posy -= 1
-    if (n == 3):
-        posy += 1
-    if (n == 4):
-        posx -= 1
-        posy -= 1
-    if (n == 5):
-        posx -= 1
-        posy += 1
-    if (n == 6):
         posx += 1
+        posy += 1
+    if (n == 3):
+        posx -= 1
+    if (n == 4):
+        # mudança de lote
+        lote = getLote(ag)
+        lote += 1
+        if (lote > 63):
+            lote = 0
+        ag = setLote(ag, lote)
+    if (n == 5):
+        posx += 1
+    if (n == 6):
+        posx -= 1
         posy -= 1
     if (n == 7):
-        posx += 1
-        posy += 1
+        posy -= 1
     if (n == 8):
-        # Mudança de lote
-        pass
+        posx += 1
+        posy -= 1
     # colisão com as fronteiras
     if (posx < 0):
         posx = 0
@@ -124,26 +127,35 @@ def move(ag_arr):
     if (posy > 511):
         posy = 511
     # salva a nova posição no bitstring
-    ag_arr[i] = setPosX(ag_arr[i], posx)
-    ag_arr[i] = setPosY(ag_arr[i], posy)
+    ag = setPosX(ag, posx)
+    ag = setPosY(ag, posy)
+    return ag
 
 # TODO Propagação da infecção
 
 # Atualiza info dos agentes
 
-@cuda.jit('void(uint32[:])')
-def update(ag_arr):
-    i = cuda.grid(1)
-    cont = getCont(ag_arr[i])
-    stat = getStat(ag_arr[i])
+@cuda.jit('uint32(uint32)', device = True)
+def update(ag):
+    cont = getCont(ag)
+    stat = getStat(ag)
     if ((stat != 0) & (cont >= periodoInf(stat))):
         stat = (stat + 1) & 3
         cont = 0
     else:
         if (cont < 63):
             cont += 1
-    ag_arr[i] = setStat(ag_arr[i], stat)
-    ag_arr[i] = setCont(ag_arr[i], cont)
+    ag = setStat(ag, stat)
+    ag = setCont(ag, cont)
+    return ag
+    
+# Método principal do ciclo
+
+@cuda.jit('void(uint32[:], uint16[:], uint16[:])')
+def cycle(ag_arr, mov_arr, inf_arr):
+    i = cuda.grid(1)
+    ag_arr[i] = move(ag_arr[i], mov_arr[i])
+    ag_arr[i] = update(ag_arr[i])
     
 # Lista as informações do agente
 
@@ -153,26 +165,35 @@ def info(agent):
     posy = (agent >> 8) & 511
     cont = (agent >> 2) & 63
     stat = agent & 3
-    print(bin(agent))
-    print(lote)
-    print(posx)
-    print(posy)
-    print(cont)
-    print(stat)
+    print(bin(agent), lote, posx, posy, cont, stat)
     
-rnd = rand.uniform(size=10,dtype=np.float32,device=True)
-for i in range(10):
-    print(rnd[i])
+n = 8
+x_arr = np.random.randint(512, size=n)
+y_arr = np.random.randint(512, size=n)
+cont_arr = np.random.randint(64, size=n)
+stat_arr = np.random.randint(4, size=n)
 
-lote = 38
-posx = 511
-posy = 12
-cont = 45
-stat = 3
-ag = (lote << 26) | (posx << 17) | (posy << 8) | (cont << 2) | (stat)
+ags = []
+mov_arr = np.random.randint(9, size=n, dtype=np.uint16)
+inf_arr = np.random.randint(10, size=n, dtype=np.uint16)
 
-arr = np.array([ag], dtype = np.uint32)
-info(arr[0])
-move[1, 1](arr)
-update[1, 1](arr)
-info(arr[0])
+for i in range(n):
+    lote = 38
+    posx = x_arr[i]
+    posy = y_arr[i]
+    cont = cont_arr[i]
+    stat = stat_arr[i]
+    ag = (lote << 26) | (posx << 17) | (posy << 8) | (cont << 2) | (stat)
+    ags.append(ag)
+
+ag_arr = np.array(ags, dtype = np.uint32)
+
+for a in range(n):
+    info(ag_arr[a])
+print()
+cycle[2, 4](ag_arr, mov_arr, inf_arr)
+for a in range(n):
+    info(ag_arr[a])
+    
+print()
+print(mov_arr)
