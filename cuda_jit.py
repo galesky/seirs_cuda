@@ -8,6 +8,8 @@ Created on Wed Apr 26 16:22:47 2017
 
 from numba import cuda
 
+# TODO Propagação da infecção
+
 # Bitshift circular para a direita
 @cuda.jit('uint32(uint32, uint32)', device = True)
 def ror(ag, n):
@@ -113,8 +115,8 @@ def changeLote(ag, viz, va, vb, rand_float):
         return ag
     # sorteio do local de destino
     destino = qtde * rand_float
-    v = va
     j = 0
+    v = va
     while (v < vb):
         if (x == viz[v] and y == viz[v + 1]):
             j += 1
@@ -174,9 +176,6 @@ def move(ag, direction):
     ag = setPosY(ag, posy)
     return ag
 
-
-# TODO Propagação da infecção
-
 """
     UPDATE DO STATUS
     
@@ -199,17 +198,19 @@ def update(ag, rand_int):
 
 # Método principal do ciclo
 @cuda.jit('void(uint32[:], uint16[:], uint16[:], float32[:], uint16[:], uint32[:])')
-def cycle(ag_arr, mov_arr, inf_arr, float_arr, viz_arr, desloc):
+def cycle(ag_arr, mov_arr, inf_arr, float_arr, viz, desloc):
     i = cuda.grid(1)
     direcao_mov = mov_arr[i]
     if (direcao_mov == 8):
         # mudança de lote
         lote = getLote(ag_arr[i])
-        va = desloc[lote]
-        vb = desloc[lote + 1]
-        ag_arr[i] = changeLote(ag_arr[i], viz_arr, va, vb, float_arr[i])
+        if (lote < len(desloc)):
+            va = desloc[lote]
+            vb = desloc[lote + 1]
+            ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, float_arr[i])
     else:
         # movimento aleatório
         ag_arr[i] = move(ag_arr[i], direcao_mov)
     # tick no contador de ciclos individual
     ag_arr[i] = update(ag_arr[i], inf_arr[i])
+    
