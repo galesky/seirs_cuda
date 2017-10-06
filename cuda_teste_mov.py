@@ -41,7 +41,7 @@ with open('Vizinhancas.csv', 'r') as f:
         viz.append(i)
     viz = np.array(viz, dtype=np.uint16)
 
-n = 4
+n = 16
     
 # Sorteia as posições, contadores e status
 x_arr = np.random.randint(512, size=n)
@@ -56,7 +56,9 @@ for i in range(n):
     posx = x_arr[i]
     posy = y_arr[i]
     cont = cont_arr[i]
+    cont = 18
     stat = stat_arr[i]
+    stat = 1
     ag = (lote << 26) | (posx << 17) | (posy << 8) | (cont << 2) | (stat)
     ags.append(ag)
 ag_arr = np.array(ags, dtype = np.uint32)
@@ -69,12 +71,13 @@ float_arr = np.array(float_arr, dtype=np.float32)
 blocks = 1
 threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
 # Inicialização da array de estados do RNG
-rng_states = create_xoroshiro128p_states(blocks * threads, seed=1)
+sd = np.random.randint(2**30) # sorteia uma seed
+rng_states = create_xoroshiro128p_states(blocks * threads, seed=sd)
 printInfo(ag_arr)
-for i in range(10):
+for i in range(1):
     refTime = time.time()
     # Chama o kernel CUDA
-    cuda.cycle[blocks, threads](ag_arr, inf_arr, float_arr, viz, desloc, rng_states)
+    cuda.cycle[blocks, threads](ag_arr, viz, desloc, rng_states)
     endTime = time.time()
     print(endTime - refTime)
     print()
