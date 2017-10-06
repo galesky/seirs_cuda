@@ -72,18 +72,17 @@ def setStat(agent, stat):
 
 # Retorna o período de mudança aleatório de status    
 @cuda.jit(device=True)
-def periodoInf(stat, rand_int):
+def periodoInf(stat, rng_states):
     """
-        para intervalos diferentes randomizar com float
         (base + float aleatorio * peso predefinido)
-    
     """
+    i = cuda.grid(1)
     if (stat == 1): # exposição
-        return 15 + rand_int
+        return 15 + int(5 * xoroshiro128p_uniform_float32(rng_states, i))
     if (stat == 2): # infectância
-        return 30 + rand_int
+        return 30 + int(5 * xoroshiro128p_uniform_float32(rng_states, i))
     if (stat == 3): # recuperação
-        return 40 + rand_int
+        return 40 + int(5 * xoroshiro128p_uniform_float32(rng_states, i))
     return 0
 
 """
@@ -103,7 +102,7 @@ def periodoInf(stat, rand_int):
 """
 
 @cuda.jit(device=True)
-def changeLote(ag, viz, va, vb, rand_float):
+def changeLote(ag, viz, va, vb, rng_states):
     x = getPosX(ag)
     y = getPosY(ag)
     qtde = 0
@@ -115,14 +114,15 @@ def changeLote(ag, viz, va, vb, rand_float):
     if (qtde == 0):
         return ag
     # sorteio do local de destino
-    destino = qtde * rand_float
+    i = cuda.grid(1)
+    destino = int(qtde * xoroshiro128p_uniform_float32(rng_states, i))
     j = 0
     v = va
     while (v < vb):
         if (x == viz[v] and y == viz[v + 1]):
-            j += 1
-            if (j > destino):
+            if (j == destino):
                 break
+            j += 1
         v += 5
     ag = setPosX(ag, viz[v + 2])
     ag = setPosY(ag, viz[v + 3])
@@ -184,10 +184,10 @@ def move(ag, direction):
 
 # Atualiza info dos agentes
 @cuda.jit(device=True)
-def update(ag, rand_int):
+def update(ag, rng_states):
     cont = getCont(ag)
     stat = getStat(ag)
-    if ((stat != 0) & (cont >= periodoInf(stat, rand_int))):
+    if ((stat != 0) & (cont >= periodoInf(stat, rng_states))):
         stat = (stat + 1) & 3
         cont = 0
     else:
@@ -199,7 +199,7 @@ def update(ag, rand_int):
 
 # Método principal do ciclo
 @cuda.jit
-def cycle(ag_arr, inf_arr, float_arr, viz, desloc, rng_states):
+def cycle(ag_arr, viz, desloc, rng_states):
     i = cuda.grid(1)
     direcao_mov = int(9 * xoroshiro128p_uniform_float32(rng_states, i))
     if (direcao_mov == 8):
@@ -208,9 +208,9 @@ def cycle(ag_arr, inf_arr, float_arr, viz, desloc, rng_states):
         if (lote < len(desloc)):
             va = desloc[lote]
             vb = desloc[lote + 1]
-            ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, float_arr[i])
+            ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, rng_states)
     else:
         # movimento aleatório
         ag_arr[i] = move(ag_arr[i], direcao_mov)
     # tick no contador de ciclos individual
-    ag_arr[i] = update(ag_arr[i], inf_arr[i])
+    ag_arr[i] = update(ag_arr[i], rng_states)
