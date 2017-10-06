@@ -62,13 +62,13 @@ for i in range(n):
 ag_arr = np.array(ags, dtype = np.uint32)
 
 # Criação das arrays randômicas de movimento e infecção
-mov_arr = np.random.randint(9, size=n, dtype=np.uint16)
 inf_arr = np.random.randint(5, size=n, dtype=np.uint16)
 float_arr = np.random.uniform(size=n)
 float_arr = np.array(float_arr, dtype=np.float32)
 
 blocks = 1
 threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
+# Inicialização da array de estados do RNG
 rng_states = create_xoroshiro128p_states(blocks * threads, seed=1)
 printInfo(ag_arr)
 for i in range(10):

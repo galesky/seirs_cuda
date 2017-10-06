@@ -203,8 +203,6 @@ def cycle(ag_arr, inf_arr, float_arr, viz, desloc, rng_states):
     i = cuda.grid(1)
     direcao_mov = int(9 * xoroshiro128p_uniform_float32(rng_states, i))
     if (direcao_mov == 8):
-        ag_arr[i] = setLote(ag_arr[i], 0)
-    if (direcao_mov == 8):
         # mudança de lote
         lote = getLote(ag_arr[i])
         if (lote < len(desloc)):
