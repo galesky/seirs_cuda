@@ -1,28 +1,16 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on Sun Oct  1 17:30:19 2017
+Created on Mon Oct  2 23:42:38 2017
 
 @author: eduardo
 """
 
-import cuda_jit as cuda
 import numpy as np
+import map_reader as mr
+import macros
 import time
-
-# Lista as informações do agente
-def printAgentInfo(agent):
-    lote = (agent >> 26)
-    posx = (agent >> 17) & 511
-    posy = (agent >> 8) & 511
-    cont = (agent >> 2) & 63
-    stat = agent & 3
-    print(bin(agent), lote, posx, posy, cont, stat)
-    
-def printInfo(ag_arr):
-    for a in range(len(ag_arr)):
-        printAgentInfo(ag_arr[a])
-    print()
+import cuda_jit as cuda
 
 #++++++++++++++IMPORTANDO VIZINHANCAS ++++++
 with open('Vizinhancas.csv', 'r') as f:
@@ -39,44 +27,45 @@ with open('Vizinhancas.csv', 'r') as f:
     for i in linhas[1]:
         viz.append(i)
     viz = np.array(viz, dtype=np.uint16)
-
-n = 4
     
-# Sorteia as posições, contadores e status
-x_arr = np.random.randint(512, size=n)
-y_arr = np.random.randint(512, size=n)
-cont_arr = np.random.randint(64, size=n)
-stat_arr = np.random.randint(4, size=n)
+#+++++++++++ IMPORTANDO DADOS DOS LOTES ++++++++++
+lotes = mr.startLotes()
+print()
+for lote in lotes:
+    lote.resetPositions()
 
-# Constrói os bitstrings com os valores sorteados
-ags = []
-for i in range(n):
-    lote = 2
-    posx = x_arr[i]
-    posx = 0
-    posy = y_arr[i]
-    posy = 0
-    cont = cont_arr[i]
-    stat = stat_arr[i]
-    ag = (lote << 26) | (posx << 17) | (posy << 8) | (cont << 2) | (stat)
-    ags.append(ag)
-ag_arr = np.array(ags, dtype = np.uint32)
+# Inicialização dos agentes
+ag_arr = []
+for lote in range(macros.qnt_lotes):
+    for i in range(macros.ag_por_lote + macros.inf_por_lote):
+        # sorteio da posição
+        posx = np.random.randint(lotes[lote].size_x)
+        posy = np.random.randint(lotes[lote].size_y)
+        status = 0
+        if (i >= macros.ag_por_lote): # adiciona agentes infectados
+            status = 2
+        # construção do bitstring
+        ag = (lote << 26) | (posx << 17) | (posy << 8) | status
+        ag_arr.append(ag)
+        # TODO adicionar índice do agente na array de posições do lote
+ag_arr = np.array(ag_arr, dtype=np.uint32)
+n = len(ag_arr)
 
-# Criação das arrays randômicas de movimento e infecção
-mov_arr = np.random.randint(9, size=n, dtype=np.uint16)
-inf_arr = np.random.randint(5, size=n, dtype=np.uint16)
-float_arr = np.random.uniform(size=n)
-float_arr = np.array(float_arr, dtype=np.float32)
-
-printInfo(ag_arr)
-refTime = time.time()
-
-# Chama o kernel CUDA
-blocks = 1
-threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
-cuda.cycle[blocks, threads](ag_arr, mov_arr, inf_arr, float_arr, viz, desloc)
-
-endTime = time.time()
-printInfo(ag_arr)
-
-print(mov_arr, endTime - refTime)
+for ciclo in range(macros.ciclos):
+    print("Iteração de número ", ciclo)
+    
+    # Arrays de movimento e infecção aleatórios
+    mov_arr = np.random.randint(9, size=n, dtype=np.uint16)
+    inf_arr = np.random.randint(5, size=n, dtype=np.uint16)
+    float_arr = np.random.uniform(size=n)
+    float_arr = np.array(float_arr, dtype=np.float32)
+    
+    refTime = time.time()
+    
+    # Chama o kernel CUDA
+    blocks = 32
+    threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
+    cuda.cycle[blocks, threads](ag_arr, mov_arr, inf_arr, float_arr, viz, desloc)
+    
+    endTime = time.time()
+    print(endTime - refTime)

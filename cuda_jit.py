@@ -7,6 +7,7 @@ Created on Wed Apr 26 16:22:47 2017
 """
 
 from numba import cuda
+from numba.cuda.random import xoroshiro128p_uniform_float32
 
 # TODO Propagação da infecção
 
@@ -26,51 +27,51 @@ def rol(ag, n):
 
 # Funções de acesso às informações do agente
 
-@cuda.jit('uint16(uint32)', device = True)
+@cuda.jit(device=True)
 def getLote(agent):
     return agent >> 26
 
-@cuda.jit('uint16(uint32)', device = True)
+@cuda.jit(device=True)
 def getPosX(agent):
     return (agent >> 17) & 511
 
-@cuda.jit('uint16(uint32)', device = True)
+@cuda.jit(device=True)
 def getPosY(agent):
     return (agent >> 8) & 511
 
-@cuda.jit('uint16(uint32)', device = True)
+@cuda.jit(device=True)
 def getCont(agent):
     return (agent >> 2) & 63
 
-@cuda.jit('uint16(uint32)', device = True)
+@cuda.jit(device=True)
 def getStat(agent):
     return agent & 3
 
 # Funções de modificação das informações do agente
 # Retornam o bitstring com o valor novo
 
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def setLote(agent, lote):
     return rol(((ror(agent, 26) >> 6 << 6) | lote), 26)
 
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def setPosX(agent, posx):
     return rol(((ror(agent, 17) >> 9 << 9) | posx), 17)
 
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def setPosY(agent, posy):
     return rol(((ror(agent, 8) >> 9 << 9) | posy), 8)
 
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def setCont(agent, cont):
     return rol(((ror(agent, 2) >> 6 << 6) | cont), 2)
 
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def setStat(agent, stat):
     return (agent >> 2 << 2) | stat
 
 # Retorna o período de mudança aleatório de status    
-@cuda.jit('uint16(uint16, uint16)', device = True)
+@cuda.jit(device=True)
 def periodoInf(stat, rand_int):
     """
         para intervalos diferentes randomizar com float
@@ -101,7 +102,7 @@ def periodoInf(stat, rand_int):
 
 """
 
-@cuda.jit('uint32(uint32, uint16[:], uint32, uint32, float32)', device = True)
+@cuda.jit(device=True)
 def changeLote(ag, viz, va, vb, rand_float):
     x = getPosX(ag)
     y = getPosY(ag)
@@ -137,7 +138,7 @@ def changeLote(ag, viz, va, vb, rand_float):
         5 6 7           8 -> Kernel chama a função de mudança de lote
         
 """
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def move(ag, direction):
     posx = getPosX(ag)
     posy = getPosY(ag)
@@ -182,7 +183,7 @@ def move(ag, direction):
 """
 
 # Atualiza info dos agentes
-@cuda.jit('uint32(uint32, uint16)', device = True)
+@cuda.jit(device=True)
 def update(ag, rand_int):
     cont = getCont(ag)
     stat = getStat(ag)
@@ -197,10 +198,12 @@ def update(ag, rand_int):
     return ag
 
 # Método principal do ciclo
-@cuda.jit('void(uint32[:], uint16[:], uint16[:], float32[:], uint16[:], uint32[:])')
-def cycle(ag_arr, mov_arr, inf_arr, float_arr, viz, desloc):
+@cuda.jit
+def cycle(ag_arr, inf_arr, float_arr, viz, desloc, rng_states):
     i = cuda.grid(1)
-    direcao_mov = mov_arr[i]
+    direcao_mov = int(9 * xoroshiro128p_uniform_float32(rng_states, i))
+    if (direcao_mov == 8):
+        ag_arr[i] = setLote(ag_arr[i], 0)
     if (direcao_mov == 8):
         # mudança de lote
         lote = getLote(ag_arr[i])
@@ -213,4 +216,3 @@ def cycle(ag_arr, mov_arr, inf_arr, float_arr, viz, desloc):
         ag_arr[i] = move(ag_arr[i], direcao_mov)
     # tick no contador de ciclos individual
     ag_arr[i] = update(ag_arr[i], inf_arr[i])
-    
