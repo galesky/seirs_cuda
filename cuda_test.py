@@ -11,6 +11,8 @@ import map_reader as mr
 import macros
 import time
 import cuda_jit as cuda
+from numba.cuda.random import create_xoroshiro128p_states
+import numba
 
 #++++++++++++++IMPORTANDO VIZINHANCAS ++++++
 with open('Vizinhancas.csv', 'r') as f:
@@ -20,7 +22,7 @@ with open('Vizinhancas.csv', 'r') as f:
     desloc = []
     for i in  linhas[0]:
         desloc.append(i)
-    desloc = np.array(desloc, dtype=np.uint32)
+    desloc = np.array(desloc, dtype=np.uint16)
         
     linhas[1].pop()
     viz = []
@@ -50,22 +52,21 @@ for lote in range(macros.qnt_lotes):
         # TODO adicionar índice do agente na array de posições do lote
 ag_arr = np.array(ag_arr, dtype=np.uint32)
 n = len(ag_arr)
-
+blocks = 32
+threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
+# Inicialização da array de estados do RNG
+sd = np.random.randint(2**30) # sorteia uma seed
+rng_states = create_xoroshiro128p_states(blocks * threads, seed=sd)
+# Transfere as arrays de consulta às vizinhanças para a GPU
+d_desloc = numba.cuda.to_device(desloc)
+d_viz = numba.cuda.to_device(viz)
 for ciclo in range(macros.ciclos):
     print("Iteração de número ", ciclo)
-    
-    # Arrays de movimento e infecção aleatórios
-    mov_arr = np.random.randint(9, size=n, dtype=np.uint16)
-    inf_arr = np.random.randint(5, size=n, dtype=np.uint16)
-    float_arr = np.random.uniform(size=n)
-    float_arr = np.array(float_arr, dtype=np.float32)
     
     refTime = time.time()
     
     # Chama o kernel CUDA
-    blocks = 32
-    threads = int(np.ceil(n / blocks)) # máximo de 1024 threads por bloco
-    cuda.cycle[blocks, threads](ag_arr, mov_arr, inf_arr, float_arr, viz, desloc)
-    
+    cuda.cycle[blocks, threads](ag_arr, d_viz, d_desloc, rng_states)
+     
     endTime = time.time()
     print(endTime - refTime)
