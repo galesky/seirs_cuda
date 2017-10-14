@@ -33,6 +33,24 @@ def startLotes():
             quadra.append(lote(num_linhas,num_colunas))
     return quadra
 
+quadraGPU = []
+
+def startLotesGPU():
+    start = 0
+    for i in range(0, macros.qnt_lotes):
+        caminho = "Lote_" + str(i) + ".csv"
+        print(caminho)
+        with open(os.path.join('Entradas', 'MonteCarlo_0', caminho), 'r') as f:
+            linhas = [row.split(';') for row in f]
+            num_linhas = (int(round(float(linhas[1][0]),0)))
+            num_colunas = (int(round(float(linhas[2][0]),0)))
+            quadraGPU.append(start)
+            quadraGPU.append(num_linhas)
+            quadraGPU.append(num_colunas)
+            start += num_linhas * num_colunas
+            print(quadraGPU[3 * i], quadraGPU[3 * i + 1], quadraGPU[3 * i + 2])
+    return quadraGPU
+
 
 def printer(int_quadra):
     for i in range(macros.qnt_lotes):
