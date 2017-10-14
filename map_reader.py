@@ -49,7 +49,8 @@ def startLotesGPU():
             quadraGPU.append(num_colunas)
             start += num_linhas * num_colunas
             print(quadraGPU[3 * i], quadraGPU[3 * i + 1], quadraGPU[3 * i + 2])
-    return quadraGPU
+    print("Total de posições:", start)
+    return quadraGPU, start
 
 
 def printer(int_quadra):
