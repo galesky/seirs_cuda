@@ -32,6 +32,7 @@ with open('Vizinhancas.csv', 'r') as f:
     
 #+++++++++++ IMPORTANDO DADOS DOS info_lotes ++++++++++
 info_lotes, total_pos = mr.startLotesGPU()
+info_lotes = np.array(info_lotes, dtype=np.uint32)
 
 # cria uma array de 128 ints vazia para cada posição dentro dos info_lotes
 pos = np.zeros((total_pos, 128), dtype=np.uint32)
@@ -80,6 +81,7 @@ for lote in range(macros.qnt_lotes):
 d_desloc = numba.cuda.to_device(desloc)
 d_viz = numba.cuda.to_device(viz)
 d_ag_arr = numba.cuda.to_device(ag_arr)
+d_info = numba.cuda.to_device(info_lotes)
 
 # Definição do número de blocos e threads # max de 1024 threads por bloco
 blocks = 32
@@ -95,7 +97,7 @@ for ciclo in range(macros.ciclos):
     refTime = time.time()
     
     # Chama o kernel CUDA
-    cuda.cycle[blocks, threads](d_ag_arr, d_viz, d_desloc, rng_states)
+    cuda.cycle[blocks, threads](d_ag_arr, d_info, d_viz, d_desloc, rng_states)
      
     endTime = time.time()
     if (ciclo != 0):

@@ -137,7 +137,7 @@ def changeLote(ag, viz, va, vb, rng_states):
         
 """
 @cuda.jit(device=True)
-def move(ag_arr, viz, desloc, rng_states):
+def move(ag_arr, info, viz, desloc, rng_states):
     i = cuda.grid(1)
     posx = getPosX(ag_arr[i])
     posy = getPosY(ag_arr[i])
@@ -168,18 +168,17 @@ def move(ag_arr, viz, desloc, rng_states):
             va = desloc[lote]
             vb = desloc[lote + 1]
             ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, rng_states)
-    # colisão com as fronteiras
-    size_x = 512
-    size_y = 512
-    # TODO buscar tamanho dos lotes
-    if (posx < 0):
-        posx = 0
-    if (posy < 0):
-        posy = 0
-    if (posx >= size_x):
-        posx = size_x - 1
-    if (posy >= size_y):
-        posy = size_y - 1
+    else: # colisão com as fronteiras
+        size_x = info[3 * lote + 1]
+        size_y = info[3 * lote + 2]
+        if (posx < 0):
+            posx = 0
+        if (posy < 0):
+            posy = 0
+        if (posx >= size_x):
+            posx = size_x - 1
+        if (posy >= size_y):
+            posy = size_y - 1
     # salva a nova posição no bitstring
     ag_arr[i] = setPosX(ag_arr[i], posx)
     ag_arr[i] = setPosY(ag_arr[i], posy)
@@ -204,6 +203,6 @@ def update(ag_arr, rng_states):
 
 # Método principal do ciclo
 @cuda.jit
-def cycle(ag_arr, viz, desloc, rng_states):
-    move(ag_arr, viz, desloc, rng_states)
+def cycle(ag_arr, info, viz, desloc, rng_states):
+    move(ag_arr, info, viz, desloc, rng_states)
     update(ag_arr, rng_states)
