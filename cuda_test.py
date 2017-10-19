@@ -30,49 +30,64 @@ with open('Vizinhancas.csv', 'r') as f:
         viz.append(i)
     viz = np.array(viz, dtype=np.uint16)
     
-#+++++++++++ IMPORTANDO DADOS DOS LOTES ++++++++++
-lotes, pos_size = mr.startLotesGPU()
+#+++++++++++ IMPORTANDO DADOS DOS info_lotes ++++++++++
+info_lotes, total_pos = mr.startLotesGPU()
 
-# Inicialização dos agentes
-ag_arr = []
-# cria uma array de 128 ints vazia para cada posição dentro dos lotes
-pos = np.zeros((pos_size, 128), dtype=np.uint32)
+# cria uma array de 128 ints vazia para cada posição dentro dos info_lotes
+pos = np.zeros((total_pos, 128), dtype=np.uint32)
+
+"""                 INICIALIZAÇÃO DO AMBIENTE                   """
+n_agentes = macros.qnt_lotes * (macros.ag_por_lote + macros.inf_por_lote)
+ag_arr = np.zeros(n_agentes, dtype=np.uint32)
+
+indice = 0
 for lote in range(macros.qnt_lotes):
-    start = lotes[3 * lote] # índice inicial do lote na array de posições
-    size_x = lotes[3 * lote + 1]
-    size_y = lotes[3 * lote + 2]
+    
+    # Informações do lote
+    start = info_lotes[3 * lote] # índice inicial do lote na array de posições
+    size_x = info_lotes[3 * lote + 1]
+    size_y = info_lotes[3 * lote + 2]
+    
+    # Criação dos agentes
     for i in range(macros.ag_por_lote + macros.inf_por_lote):
+        
         # sorteio da posição
         posx = np.random.randint(size_x)
         posy = np.random.randint(size_y)
+        
+        # adiciona agentes infectados
         status = 0
-        if (i >= macros.ag_por_lote): # adiciona agentes infectados
+        if (i >= macros.ag_por_lote):
             status = 2
+            
         # construção do bitstring
-        ag = (lote << 26) | (posx << 17) | (posy << 8) | status
-        ag_arr.append(ag)
-        #++++ indexação do agente na array de posição ++++#
-        index = len(ag_arr) # 0 é vazio, 1 é o primeiro agente
+        ag_arr[indice] = (lote << 26) | (posx << 17) | (posy << 8) | status
+        
         # determinação da posição do agente
-        pos_agente = posx + posy * size_x
-        pos_abs = start + pos_agente
-        n = pos[pos_abs, 0] # total de agentes já naquela posição
+        pos_agente = start + posx + posy * size_x
+        
+        n = pos[pos_agente, 0] # total de agentes já naquela posição
+        
         if (n < 127): # cabem 127 em cada posição, [0] guarda o total
             n += 1
-            pos[pos_abs, 0] = n
-            pos[pos_abs, n] = index
-# transforma a array de agentes em uma np_array para uso no kernel
-ag_arr = np.array(ag_arr, dtype=np.uint32)
-# calcula o total de blocos e threads a serem usados no kernel
-blocks = 32
-threads = int(np.ceil(len(ag_arr) / blocks)) # máximo de 1024 threads por bloco
-# Inicialização da array de estados do RNG
-sd = np.random.randint(2**30) # sorteia uma seed
-rng_states = create_xoroshiro128p_states(blocks * threads, seed=sd)
-# Transfere as arrays para a GPU
+            pos[pos_agente, 0] = n
+            pos[pos_agente, n] = indice + 1
+        
+        indice += 1
+        
+"""             TRANSFERINDO DADOS PARA GPU             """
+
 d_desloc = numba.cuda.to_device(desloc)
 d_viz = numba.cuda.to_device(viz)
 d_ag_arr = numba.cuda.to_device(ag_arr)
+
+# Definição do número de blocos e threads # max de 1024 threads por bloco
+blocks = 32
+threads = int(np.ceil(n_agentes / blocks))
+
+# Inicialização da array de estados do RNG
+nova_seed = np.random.randint(2**30)
+rng_states = create_xoroshiro128p_states(blocks * threads, seed=nova_seed)
 
 tempo = []
 for ciclo in range(macros.ciclos):
