@@ -9,8 +9,6 @@ Created on Wed Apr 26 16:22:47 2017
 from numba import cuda
 from numba.cuda.random import xoroshiro128p_uniform_float32
 
-# TODO Propagação da infecção
-
 # Bitshift circular para a direita
 @cuda.jit('uint32(uint32, uint32)', device = True)
 def ror(ag, n):
@@ -139,10 +137,11 @@ def changeLote(ag, viz, va, vb, rng_states):
         
 """
 @cuda.jit(device=True)
-def move(ag, direction):
-    posx = getPosX(ag)
-    posy = getPosY(ag)
-    n = direction # random 0-8
+def move(ag_arr, viz, desloc, rng_states):
+    i = cuda.grid(1)
+    posx = getPosX(ag_arr[i])
+    posy = getPosY(ag_arr[i])
+    n = int(9 * xoroshiro128p_uniform_float32(rng_states, i))
     if (n == 0):
         posx -= 1
         posy -= 1
@@ -163,54 +162,48 @@ def move(ag, direction):
     if (n == 7):
         posx += 1
         posy += 1
+    if (n == 8): # mudança de lote
+        lote = getLote(ag_arr[i])
+        if (lote < len(desloc)):
+            va = desloc[lote]
+            vb = desloc[lote + 1]
+            ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, rng_states)
     # colisão com as fronteiras
+    size_x = 512
+    size_y = 512
+    # TODO buscar tamanho dos lotes
     if (posx < 0):
         posx = 0
     if (posy < 0):
         posy = 0
-    if (posx > 511):
-        posx = 511
-    if (posy > 511):
-        posy = 511
+    if (posx >= size_x):
+        posx = size_x - 1
+    if (posy >= size_y):
+        posy = size_y - 1
     # salva a nova posição no bitstring
-    ag = setPosX(ag, posx)
-    ag = setPosY(ag, posy)
-    return ag
+    ag_arr[i] = setPosX(ag_arr[i], posx)
+    ag_arr[i] = setPosY(ag_arr[i], posy)
 
 """
     UPDATE DO STATUS
     
 """
-
-# Atualiza info dos agentes
 @cuda.jit(device=True)
-def update(ag, rng_states):
-    cont = getCont(ag)
-    stat = getStat(ag)
+def update(ag_arr, rng_states):
+    i = cuda.grid(1)
+    cont = getCont(ag_arr[i])
+    stat = getStat(ag_arr[i])
     if ((stat != 0) & (cont >= periodoInf(stat, rng_states))):
         stat = (stat + 1) & 3
         cont = 0
     else:
         if (cont < 63):
             cont += 1
-    ag = setStat(ag, stat)
-    ag = setCont(ag, cont)
-    return ag
+    ag_arr[i] = setStat(ag_arr[i], stat)
+    ag_arr[i] = setCont(ag_arr[i], cont)
 
 # Método principal do ciclo
 @cuda.jit
 def cycle(ag_arr, viz, desloc, rng_states):
-    i = cuda.grid(1)
-    direcao_mov = int(9 * xoroshiro128p_uniform_float32(rng_states, i))
-    if (direcao_mov == 8):
-        # mudança de lote
-        lote = getLote(ag_arr[i])
-        if (lote < len(desloc)):
-            va = desloc[lote]
-            vb = desloc[lote + 1]
-            ag_arr[i] = changeLote(ag_arr[i], viz, va, vb, rng_states)
-    else:
-        # movimento aleatório
-        ag_arr[i] = move(ag_arr[i], direcao_mov)
-    # tick no contador de ciclos individual
-    ag_arr[i] = update(ag_arr[i], rng_states)
+    move(ag_arr, viz, desloc, rng_states)
+    update(ag_arr, rng_states)
